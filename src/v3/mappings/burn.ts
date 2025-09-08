@@ -14,6 +14,9 @@ import {
 } from './intervalUpdates'
 import { loadTransaction } from './utils'
 
+import { getPositionId } from '../../common/position'
+import { Position } from '../../../generated/schema'
+
 export function handleBurn(event: BurnEvent): void {
   const factoryAddress = Address.fromString(FACTORY_ADDRESS)
 
@@ -89,6 +92,23 @@ export function handleBurn(event: BurnEvent): void {
       lowerTick.save()
       upperTick.save()
     }
+
+    // Update position
+  const positionId = getPositionId(
+    pool.id,
+    event.params.owner,
+    BigInt.fromI32(event.params.tickLower),
+    BigInt.fromI32(event.params.tickUpper)
+  )
+  
+  const position = Position.load(positionId)
+  if (position !== null) {
+    position.liquidity = position.liquidity.minus(event.params.amount)
+    position.withdrawnToken0 = position.withdrawnToken0.plus(amount0)
+    position.withdrawnToken1 = position.withdrawnToken1.plus(amount1)
+    position.save()
+  }
+
     updateUniswapDayData(event, factoryAddress.toHexString())
     updatePoolDayData(event)
     updatePoolHourData(event)

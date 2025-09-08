@@ -15,6 +15,9 @@ import {
 import { createTick } from './tick'
 import { loadTransaction } from './utils'
 
+import { createPosition, getPositionId } from '../../common/position'
+import { Position } from '../../../generated/schema'
+
 export function handleMint(event: MintEvent): void {
   const factoryAddress = Address.fromString(FACTORY_ADDRESS)
 
@@ -90,6 +93,7 @@ export function handleMint(event: MintEvent): void {
     mint.tickLower = BigInt.fromI32(event.params.tickLower)
     mint.tickUpper = BigInt.fromI32(event.params.tickUpper)
     mint.logIndex = event.logIndex
+    
 
     // tick entities
     const lowerTickIdx = event.params.tickLower
@@ -117,6 +121,36 @@ export function handleMint(event: MintEvent): void {
 
     lowerTick.save()
     upperTick.save()
+
+    // Handle position
+  const positionId = getPositionId(
+    pool.id, 
+    event.params.owner, 
+    BigInt.fromI32(event.params.tickLower), 
+    BigInt.fromI32(event.params.tickUpper)
+  )
+  
+  let position = Position.load(positionId)
+  if (position === null) {
+    position = createPosition(
+      pool.id,
+      event.params.owner,
+      BigInt.fromI32(event.params.tickLower),
+      BigInt.fromI32(event.params.tickUpper),
+      transaction.id
+    )
+    position.pool = pool.id
+    position.token0 = pool.token0
+    position.token1 = pool.token1
+    position.tickLower = lowerTick.id
+    position.tickUpper = upperTick.id
+  }
+  
+  // Update position liquidity and deposits
+  position.liquidity = position.liquidity.plus(event.params.amount)
+  position.depositedToken0 = position.depositedToken0.plus(amount0)
+  position.depositedToken1 = position.depositedToken1.plus(amount1)
+  position.save()
 
     // TODO: Update Tick's volume, fees, and liquidity provider count. Computing these on the tick
     // level requires reimplementing some of the swapping code from v3-core.

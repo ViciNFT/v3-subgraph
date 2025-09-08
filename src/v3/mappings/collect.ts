@@ -15,6 +15,9 @@ import {
 } from './intervalUpdates'
 import { loadTransaction } from './utils'
 
+import { getPositionId } from '../../common/position'
+import { Position } from '../../../generated/schema'
+
 export function handleCollect(event: CollectEvent): void {
   const factoryAddress = Address.fromString(FACTORY_ADDRESS)
 
@@ -87,6 +90,21 @@ export function handleCollect(event: CollectEvent): void {
   collect.tickUpper = BigInt.fromI32(event.params.tickUpper)
   collect.logIndex = event.logIndex
 
+  // Update position collected fees
+  const positionId = getPositionId(
+    pool.id,
+    event.params.owner,
+    BigInt.fromI32(event.params.tickLower),
+    BigInt.fromI32(event.params.tickUpper)
+  )
+  
+  const position = Position.load(positionId)
+  if (position !== null) {
+    position.collectedFeesToken0 = position.collectedFeesToken0.plus(collectedAmountToken0)
+    position.collectedFeesToken1 = position.collectedFeesToken1.plus(collectedAmountToken1)
+    position.save()
+  }
+  
   updateUniswapDayData(event, factoryAddress.toHexString())
   updatePoolDayData(event)
   updatePoolHourData(event)
